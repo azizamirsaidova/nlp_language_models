@@ -10,6 +10,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 import import_data
+import vocabulary
 
 
 def main():
@@ -21,6 +22,12 @@ def main():
     test = import_data.load_file('wiki.test.txt')
 
     # Create the vocabulary
+    vocab = vocabulary.create_vocabulary(train)
+
+    # Transform tokens from words to indexes
+    train_indexes = vocabulary.corpus_to_index(train, vocab)
+    valid_indexes = vocabulary.corpus_to_index(valid, vocab)
+    test_indexes = vocabulary.corpus_to_index(test, vocab)
 
     # Define parameters
 
