@@ -6,7 +6,6 @@ def create_vocabulary(file):
     file_1 = f.read()
     file_1 = file_1.lower()
     corpus = file_1.split(" ")
-    corpus = list(set(corpus))
     vocab = {}
     count = 0
     # Review all the corpus to get unique words and give an index
