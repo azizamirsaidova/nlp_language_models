@@ -129,7 +129,7 @@ def main():
     embedding_dim = 100
     hidden_dim = 1
     layers = 2
-    untied = True
+    tied = False
     gru_dropout = 0
     learning_rate = 0.001
     epochs = 4
@@ -137,7 +137,7 @@ def main():
     batch_size = 6010
 
     # Execute the RNN model
-    model = Rnn(len(vocab), embedding_dim, hidden_dim, layers, untied, gru_dropout)
+    model = Rnn(len(vocab), embedding_dim, hidden_dim, layers, tied, gru_dropout)
     optimizer = optim.RMSprop(model.parameters(), lr = learning_rate)
 
     for epoch_ind in range(epochs):

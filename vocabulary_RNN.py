@@ -25,10 +25,8 @@ def corpus_to_index(corpus, vocab):
             if word in vocab:
                 index = vocab[word]
                 aux_sentence.append(index)
-            #else:
-            #    index = "<unk>"
-            #    aux_sentence.append(index)
-    return new_corpus
+    new_list = [x for x in new_corpus if len(x) >= 2]
+    return new_list
 
 def main():
     vocab = create_vocabulary('wiki.train.txt')
