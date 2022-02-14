@@ -9,8 +9,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-import import_data
-import vocabulary
+import import_data_RNN
+import vocabulary_RNN
 
 
 def main():

@@ -1,4 +1,4 @@
-import import_data
+import import_data_RNN
 
 # Create the vocabulary dictionary and set indexes, where Key: word, value: index
 def create_vocabulary(file):
