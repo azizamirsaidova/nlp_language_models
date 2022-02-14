@@ -12,6 +12,9 @@ import torch.optim as optim
 import vocabulary_RNN
 import import_data_RNN
 
+from datetime import datetime
+import matplotlib.pyplot as plt
+
 
 class Rnn(nn.Module):
     """ A language model RNN with GRU layer(s). """
@@ -54,10 +57,19 @@ def batches(data, batch_size):
 
 
 def step(model, sents, device):
-    """ Performs a model inference for the given model and sentence batch.
-    Returns the model output, total loss and target outputs. """
-    x = nn.utils.rnn.pack_sequence([s[:-1] for s in sents])
-    y = nn.utils.rnn.pack_sequence([s[1:] for s in sents])
+    ''' We feed x with 30 words, to predict word y number 31 '''
+    x_list = []
+    y_list = []
+    for i in range(sents):
+        x_aux = sents[i : i+30]
+        y_aux = sents[i+30 : i + 31]
+        x_list.append(x_aux)
+        y_list.append(y_aux)
+
+    x = nn.utils.rnn.pack_sequence(x_list)
+    y = nn.utils.rnn.pack_sequence(y_list)
+    #x = nn.utils.rnn.pack_sequence([s[:-1] for s in sents])
+    #y = nn.utils.rnn.pack_sequence([s[1:] for s in sents])
     if device.type == 'cuda':
         x, y = x.cuda(), y.cuda()
     out = model(x)
@@ -84,8 +96,7 @@ def train_epoch(data, model, optimizer, args, device):
                          batch_ind, loss.item(), perplexity)
 
 
-def evaluate(data, model, batch_size, device):
-    """ Perplexity of the given data with the given model. """
+def perplexity_eval(data, model, batch_size, device):
     model.eval()
     with torch.no_grad():
         entropy_sum = 0
@@ -100,28 +111,28 @@ def evaluate(data, model, batch_size, device):
 
 def parse_args(args):
     argp = ArgumentParser(description=__doc__)
-    argp.add_argument("--logging", choices=["INFO", "DEBUG"],
-                      default="INFO")
-
-    argp.add_argument("--embedding-dim", type=int, default=100,
-                      help="Word embedding dimensionality")
-    argp.add_argument("--untied", action="store_true",
-                      help="Use untied input/output embedding weights")
-    argp.add_argument("--gru-hidden", type=int, default=100,
-                      help="GRU gidden unit dimensionality")
-    argp.add_argument("--gru-layers", type=int, default=2,
-                      help="Number of GRU layers")
-    argp.add_argument("--gru-dropout", type=float, default=0.0,
-                      help="The amount of dropout in GRU layers")
-
-    argp.add_argument("--epochs", type=int, default=2)
+    argp.add_argument("--logging", choices=["INFO", "DEBUG"],default="INFO")
+    argp.add_argument("--embedding-dim", type=int, default=100)
+    argp.add_argument("--untied", action="store_true")
+    argp.add_argument("--gru-hidden", type=int, default=100)
+    argp.add_argument("--gru-layers", type=int, default=2)
+    argp.add_argument("--gru-dropout", type=float, default=0.0)
+    argp.add_argument("--epochs", type=int, default=5)
     argp.add_argument("--batch-size", type=int, default=512)
-    argp.add_argument("--lr", type=float, default=0.001,
-                      help="Learning rate")
-
+    argp.add_argument("--lr", type=float, default=0.001)
     argp.add_argument("--no-cuda", action="store_true")
     return argp.parse_args(args)
 
+def plot_perplexity(perplexity_valid, perplexity_test):
+    #plt.plot(perplexity_train)
+    plt.plot(perplexity_valid)
+    plt.plot(perplexity_test)
+    plt.title('RNN Model perplexity')
+    plt.ylabel('perplexity')
+    plt.xlabel('epoch')
+    plt.xticks([0, 1, 2, 3, 4])
+    plt.legend(['validation', 'test'], loc='upper left')
+    plt.show()
 
 def main(args=sys.argv[1:]):
     args = parse_args(args)
@@ -147,14 +158,32 @@ def main(args=sys.argv[1:]):
                   not args.untied, args.gru_dropout).to(device)
     optimizer = optim.RMSprop(model.parameters(), lr=args.lr)
 
+    #perplexity_train = []
+    perplexity_valid = []
+    perplexity_test = []
+
     for epoch_ind in range(args.epochs):
         logging.info("Training epoch %d", epoch_ind)
         train_epoch(train_indexes, model, optimizer, args, device)
-        logging.info("Validation perplexity: %.1f",
-                     evaluate(valid_indexes, model, args.batch_size, device))
-    logging.info("Test perplexity: %.1f",
-                 evaluate(test_indexes, model, args.batch_size, device))
+
+        #perp_train = evaluate(train_indexes, model, args.batch_size, device)
+        perp_valid = perplexity_eval(valid_indexes, model, args.batch_size, device)
+        perp_test = perplexity_eval(test_indexes, model, args.batch_size, device)
+
+        #perplexity_train.append(perp_train)
+        perplexity_valid.append(perp_valid)
+        perplexity_test.append(perp_test)
+
+        #logging.info("Train perplexity: %.1f", perp_train)
+        logging.info("Validation perplexity: %.1f", perp_valid)
+        logging.info("Test perplexity: %.1f", perp_test)
+
+    plot_perplexity(perplexity_valid, perplexity_test)
+
 
 
 if __name__ == '__main__':
+    start_time = datetime.now()
     main()
+    end_time = datetime.now()
+    print('Duration: {}'.format(end_time - start_time))

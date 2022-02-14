@@ -15,7 +15,7 @@ def create_vocabulary(file):
             count += 1
     return vocab
 
-# Transform the corpus from words to indexes tokens
+# Transform the corpus to indexes. List of sentences, with lists of words inside them.
 def corpus_to_index(corpus, vocab):
     new_corpus = []
     for sentence in corpus:
@@ -28,12 +28,21 @@ def corpus_to_index(corpus, vocab):
     new_list = [x for x in new_corpus if len(x) >= 2]
     return new_list
 
+# Transform the corpus to indexes. List of words.
+def word_to_index(corpus, vocab):
+    new_corpus = []
+    for sentence in corpus:
+        for word in sentence:
+            if word in vocab:
+                index = vocab[word]
+                new_corpus.append(index)
+    return new_corpus
+
 def main():
     vocab = create_vocabulary('wiki.train.txt')
-    print(vocab)
     corpus = import_data_RNN.load_file('wiki.train.txt')
-    corpus_index = corpus_to_index(corpus, vocab)
-    print(corpus_index)
+    word_index = word_to_index(corpus, vocab)
+    print(word_index)
 
 if __name__ == '__main__':
     main()
