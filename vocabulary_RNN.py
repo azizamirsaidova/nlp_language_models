@@ -25,15 +25,15 @@ def corpus_to_index(corpus, vocab):
             if word in vocab:
                 index = vocab[word]
                 aux_sentence.append(index)
-            else:
-                index = "<unk>"
-                aux_sentence.append(index)
+            #else:
+            #    index = "<unk>"
+            #    aux_sentence.append(index)
     return new_corpus
 
 def main():
     vocab = create_vocabulary('wiki.train.txt')
     print(vocab)
-    corpus = import_data.load_file('wiki.train.txt')
+    corpus = import_data_RNN.load_file('wiki.train.txt')
     corpus_index = corpus_to_index(corpus, vocab)
     print(corpus_index)
 
