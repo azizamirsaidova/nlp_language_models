@@ -8,6 +8,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader
+from torch.nn.utils.rnn import pack_sequence
 
 import import_data_RNN
 import vocabulary_RNN
@@ -20,6 +22,8 @@ class Rnn(nn.Module):
         if not tied:
             self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.fc1 = nn.Linear(hidden_dim, vocab_size)
+        self.gru = nn.GRU(embedding_dim, hidden_dim, layers,
+                          dropout=dropout)
 
     def embeddings(self, word_indexes):
         if self.tied:
@@ -33,9 +37,10 @@ class Rnn(nn.Module):
             for the token following the one that's input in a tensor shaped
             (T, |V|).
             """
-            embedded_sents = nn.utils.rnn.PackedSequence(
-                self.embeddings(packed_sents.data), packed_sents.batch_sizes)
+            embedded_sents = nn.utils.rnn.PackedSequence(self.embeddings(packed_sents.data), packed_sents.batch_sizes)
+            #print(embedded_sents)
             out_packed_sequence, _ = self.gru(embedded_sents)
+            #print("Out packed sequence", out_packed_sequence)
             out = self.fc1(out_packed_sequence.data)
             return F.log_softmax(out, dim=1)
 
@@ -45,13 +50,27 @@ def batches(data, batch_size):
     for i in range(0, len(data), batch_size):
         sentences = data[i:i + batch_size]
         sentences.sort(key=lambda l: len(l), reverse=True)
-        yield [torch.LongTensor(s) for s in sentences]
+        for s in sentences:
+            if len(s) > 0:
+                yield [torch.LongTensor(s)]
+
 
 def step(model, sents, device):
     """ Performs a model inference for the given model and sentence batch.
-    Returns the model otput, total loss and target outputs. """
+    Returns the model output, total loss and target outputs. """
+    x_data = []
+    y_data = []
+    for s in sents:
+        aux_x = s[:-1]
+        aux_y = s[1:]
+        x_data.append(aux_x)
+        y_data.append(aux_y)
+
     x = nn.utils.rnn.pack_sequence([s[:-1] for s in sents])
     y = nn.utils.rnn.pack_sequence([s[1:] for s in sents])
+    #x = nn.utils.rnn.pack_sequence(x_data)
+    #print(x)
+    #y = nn.utils.rnn.pack_sequence(y_data)
     if device.type == 'cuda':
         x, y = x.cuda(), y.cuda()
     out = model(x)
@@ -115,7 +134,7 @@ def main():
     learning_rate = 0.001
     epochs = 4
     batches = 20
-    batch_size = 200
+    batch_size = 6010
 
     # Execute the RNN model
     model = Rnn(len(vocab), embedding_dim, hidden_dim, layers, untied, gru_dropout)
