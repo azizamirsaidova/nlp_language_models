@@ -19,12 +19,12 @@ import matplotlib.pyplot as plt
 class Rnn(nn.Module):
     """ A language model RNN with GRU layer(s). """
 
-    def __init__(self, vocab_size, embedding_dim, hidden_dim, gru_layers, tied, dropout):
+    def __init__(self, vocab_size, embedding_dim, hidden_dim, num_layers, tied, dropout):
         super(Rnn, self).__init__()
         self.tied = tied
         if not tied:
             self.embedding = nn.Embedding(vocab_size, embedding_dim)
-        self.gru = nn.GRU(embedding_dim, hidden_dim, gru_layers,
+        self.rnn = nn.RNN(embedding_dim, hidden_dim, num_layers,
                           dropout=dropout)
         self.fc1 = nn.Linear(hidden_dim, vocab_size)
 
@@ -35,17 +35,21 @@ class Rnn(nn.Module):
             return self.embedding(word_indexes)
 
     def forward(self, packed_sents):
-        """ Takes a PackedSequence of sentences tokens that has T tokens
-        belonging to vocabulary V. Outputs predicted log-probabilities
-        for the token following the one that's input in a tensor shaped
-        (T, |V|).
-        """
-        embedded_sents = nn.utils.rnn.PackedSequence(
-            self.get_embedded(packed_sents.data), packed_sents.batch_sizes)
-        out_packed_sequence, _ = self.gru(embedded_sents)
+        embedded_sents = nn.utils.rnn.PackedSequence(self.get_embedded(packed_sents.data), packed_sents.batch_sizes)
+        out_packed_sequence, input_sizes = self.rnn(embedded_sents)
         out = self.fc1(out_packed_sequence.data)
-        return F.log_softmax(out, dim=1)
+        last_seq = out[-121:]
+        #return F.log_softmax(out, dim=1)
+        return F.log_softmax(last_seq, dim=1)
 
+def batches_2(data, batch_size):
+    """ Yields batches of sentences from 'data', shuffled """
+    batches_list = []
+    for i in range(0, len(data)):
+        batch = data[i:i + batch_size]
+        batches_list.append(batch)
+    random.shuffle(data)
+    return batches_list
 
 def batches(data, batch_size):
     """ Yields batches of sentences from 'data', ordered on length. """
@@ -55,46 +59,78 @@ def batches(data, batch_size):
         sentences.sort(key=lambda l: len(l), reverse=True)
         yield [torch.LongTensor(s) for s in sentences]
 
+def step_2(model, data, device):
+    ''' We feed x with 30 words, to predict word y number 31'''
+    data_tensor = torch.tensor(data)
+    x = nn.utils.rnn.pack_sequence([data_tensor[i : i+29] for i in range(0, len(data)-30)])
+    y = nn.utils.rnn.pack_sequence([data_tensor[i+29 : i+30] for i in range(0, len(data)-30)])
 
-def step(model, sents, device):
-    ''' We feed x with 30 words, to predict word y number 31 '''
-    x_list = []
-    y_list = []
-    for i in range(sents):
-        x_aux = sents[i : i+30]
-        y_aux = sents[i+30 : i + 31]
-        x_list.append(x_aux)
-        y_list.append(y_aux)
-
-    x = nn.utils.rnn.pack_sequence(x_list)
-    y = nn.utils.rnn.pack_sequence(y_list)
-    #x = nn.utils.rnn.pack_sequence([s[:-1] for s in sents])
-    #y = nn.utils.rnn.pack_sequence([s[1:] for s in sents])
     if device.type == 'cuda':
         x, y = x.cuda(), y.cuda()
     out = model(x)
     loss = F.nll_loss(out, y.data)
     return out, loss, y
 
+def step(model, sents, device):
+
+    x = nn.utils.rnn.pack_sequence([s[:-1] for s in sents])
+    y = nn.utils.rnn.pack_sequence([s[1:] for s in sents])
+    if device.type == 'cuda':
+        x, y = x.cuda(), y.cuda()
+    out = model(x)
+    loss = F.nll_loss(out, y.data)
+    return out, loss, y
+
+def train_epoch_2(data, model, optimizer, args, device):
+    """ Trains a single epoch of the given model. """
+    model.train()
+    batch_count = 0
+    for batch in batches_2(data, args.batch_size):
+        if batch_count > 10:
+            break
+        model.zero_grad()
+        out, loss, y = step_2(model, batch, device)
+        loss.backward()
+        optimizer.step()
+        if batch_count <= 10:
+            # Calculate perplexity.
+            prob = out.exp()[torch.arange(0, y.data.shape[0], dtype=torch.int64), y.data]
+            perplexity = 2 ** prob.log2().neg().mean().item()
+            logging.info("\tBatch %d, loss %.3f, perplexity %.2f", batch_count, loss.item(), perplexity)
+            batch_count += 1
 
 def train_epoch(data, model, optimizer, args, device):
     """ Trains a single epoch of the given model. """
     model.train()
     for batch_ind, sents in enumerate(batches(data, args.batch_size)):
-        if batch_ind > 5:
+        if batch_ind > 10:
             break
         model.zero_grad()
         out, loss, y = step(model, sents, device)
         loss.backward()
         optimizer.step()
-        if batch_ind <= 5:
+        if batch_ind <= 10:
             # Calculate perplexity.
-            prob = out.exp()[
-                torch.arange(0, y.data.shape[0], dtype=torch.int64), y.data]
+            prob = out.exp()[torch.arange(0, y.data.shape[0], dtype=torch.int64), y.data]
             perplexity = 2 ** prob.log2().neg().mean().item()
             logging.info("\tBatch %d, loss %.3f, perplexity %.2f",
                          batch_ind, loss.item(), perplexity)
 
+def perplexity_eval_2(data, model, batch_size, device):
+    model.eval()
+    with torch.no_grad():
+        entropy_sum = 0
+        word_count = 0
+        batch_count = 0
+        for batch in batches_2(data, batch_size):
+            if batch_count > 10:
+                break
+            out, _, y = step_2(model, batch, device)
+            prob = out.exp()[torch.arange(0, y.data.shape[0], dtype=torch.int64), y.data]
+            entropy_sum += prob.log2().neg().sum().item()
+            word_count += y.data.shape[0]
+            batch_count += 1
+    return 2 ** (entropy_sum / word_count)
 
 def perplexity_eval(data, model, batch_size, device):
     model.eval()
@@ -114,11 +150,11 @@ def parse_args(args):
     argp.add_argument("--logging", choices=["INFO", "DEBUG"],default="INFO")
     argp.add_argument("--embedding-dim", type=int, default=100)
     argp.add_argument("--untied", action="store_true")
-    argp.add_argument("--gru-hidden", type=int, default=100)
-    argp.add_argument("--gru-layers", type=int, default=2)
-    argp.add_argument("--gru-dropout", type=float, default=0.0)
-    argp.add_argument("--epochs", type=int, default=5)
-    argp.add_argument("--batch-size", type=int, default=512)
+    argp.add_argument("--num-hidden", type=int, default=100)
+    argp.add_argument("--num-layers", type=int, default=2)
+    argp.add_argument("--num-dropout", type=float, default=0.0)
+    argp.add_argument("--epochs", type=int, default=20)
+    argp.add_argument("--batch-size", type=int, default=151)
     argp.add_argument("--lr", type=float, default=0.001)
     argp.add_argument("--no-cuda", action="store_true")
     return argp.parse_args(args)
@@ -130,7 +166,7 @@ def plot_perplexity(perplexity_valid, perplexity_test):
     plt.title('RNN Model perplexity')
     plt.ylabel('perplexity')
     plt.xlabel('epoch')
-    plt.xticks([0, 1, 2, 3, 4])
+    plt.xticks([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19])
     plt.legend(['validation', 'test'], loc='upper left')
     plt.show()
 
@@ -148,27 +184,32 @@ def main(args=sys.argv[1:]):
     # Create the vocabulary
     vocab = vocabulary_RNN.create_vocabulary('wiki.train.txt')
 
-    # Transform tokens from words to indexes
-    train_indexes = vocabulary_RNN.corpus_to_index(train, vocab)
-    valid_indexes = vocabulary_RNN.corpus_to_index(valid, vocab)
-    test_indexes = vocabulary_RNN.corpus_to_index(test, vocab)
+    # Transform SENTENCES tokens from words to indexes
+    #train_indexes_sentences = vocabulary_RNN.corpus_to_index(train, vocab)
+    #valid_indexes_sentences = vocabulary_RNN.corpus_to_index(valid, vocab)
+    #test_indexes_sentences = vocabulary_RNN.corpus_to_index(test, vocab)
+
+    # Transform WORD tokens from words to indexes
+    train_indexes_word = vocabulary_RNN.word_to_index(train, vocab)
+    valid_indexes_word = vocabulary_RNN.word_to_index(valid, vocab)
+    test_indexes_word = vocabulary_RNN.word_to_index(test, vocab)
 
     model = Rnn(len(vocab), args.embedding_dim,
-                  args.gru_hidden, args.gru_layers,
-                  not args.untied, args.gru_dropout).to(device)
+                  args.num_hidden, args.num_layers,
+                  not args.untied, args.num_dropout).to(device)
     optimizer = optim.RMSprop(model.parameters(), lr=args.lr)
 
-    #perplexity_train = []
+    perplexity_train = []
     perplexity_valid = []
     perplexity_test = []
 
     for epoch_ind in range(args.epochs):
         logging.info("Training epoch %d", epoch_ind)
-        train_epoch(train_indexes, model, optimizer, args, device)
+        train_epoch_2(train_indexes_word, model, optimizer, args, device)
 
-        #perp_train = evaluate(train_indexes, model, args.batch_size, device)
-        perp_valid = perplexity_eval(valid_indexes, model, args.batch_size, device)
-        perp_test = perplexity_eval(test_indexes, model, args.batch_size, device)
+        #perp_train = perplexity_eval_2(train_indexes_word, model, args.batch_size, device)
+        perp_valid = perplexity_eval_2(valid_indexes_word, model, args.batch_size, device)
+        perp_test = perplexity_eval_2(test_indexes_word, model, args.batch_size, device)
 
         #perplexity_train.append(perp_train)
         perplexity_valid.append(perp_valid)
@@ -179,8 +220,6 @@ def main(args=sys.argv[1:]):
         logging.info("Test perplexity: %.1f", perp_test)
 
     plot_perplexity(perplexity_valid, perplexity_test)
-
-
 
 if __name__ == '__main__':
     start_time = datetime.now()
