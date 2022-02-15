@@ -17,15 +17,13 @@ import matplotlib.pyplot as plt
 
 
 class Rnn(nn.Module):
-    """ A language model RNN with GRU layer(s). """
 
     def __init__(self, vocab_size, embedding_dim, hidden_dim, num_layers, tied, dropout):
         super(Rnn, self).__init__()
         self.tied = tied
         if not tied:
             self.embedding = nn.Embedding(vocab_size, embedding_dim)
-        self.rnn = nn.RNN(embedding_dim, hidden_dim, num_layers,
-                          dropout=dropout)
+        self.rnn = nn.RNN(embedding_dim, hidden_dim, num_layers, dropout=dropout)
         self.fc1 = nn.Linear(hidden_dim, vocab_size)
 
     def get_embedded(self, word_indexes):
@@ -39,11 +37,9 @@ class Rnn(nn.Module):
         out_packed_sequence, input_sizes = self.rnn(embedded_sents)
         out = self.fc1(out_packed_sequence.data)
         last_seq = out[-121:]
-        #return F.log_softmax(out, dim=1)
         return F.log_softmax(last_seq, dim=1)
 
-def batches_2(data, batch_size):
-    """ Yields batches of sentences from 'data', shuffled """
+def batches(data, batch_size):
     batches_list = []
     for i in range(0, len(data)):
         batch = data[i:i + batch_size]
@@ -51,15 +47,8 @@ def batches_2(data, batch_size):
     random.shuffle(data)
     return batches_list
 
-def batches(data, batch_size):
-    """ Yields batches of sentences from 'data', ordered on length. """
-    random.shuffle(data)
-    for i in range(0, len(data), batch_size):
-        sentences = data[i:i + batch_size]
-        sentences.sort(key=lambda l: len(l), reverse=True)
-        yield [torch.LongTensor(s) for s in sentences]
 
-def step_2(model, data, device):
+def time_step(model, data, device):
     ''' We feed x with 30 words, to predict word y number 31'''
     data_tensor = torch.tensor(data)
     x = nn.utils.rnn.pack_sequence([data_tensor[i : i+29] for i in range(0, len(data)-30)])
@@ -71,25 +60,14 @@ def step_2(model, data, device):
     loss = F.nll_loss(out, y.data)
     return out, loss, y
 
-def step(model, sents, device):
-
-    x = nn.utils.rnn.pack_sequence([s[:-1] for s in sents])
-    y = nn.utils.rnn.pack_sequence([s[1:] for s in sents])
-    if device.type == 'cuda':
-        x, y = x.cuda(), y.cuda()
-    out = model(x)
-    loss = F.nll_loss(out, y.data)
-    return out, loss, y
-
-def train_epoch_2(data, model, optimizer, args, device):
-    """ Trains a single epoch of the given model. """
+def train_epoch(data, model, optimizer, args, device):
     model.train()
     batch_count = 0
-    for batch in batches_2(data, args.batch_size):
+    for batch in batches(data, args.batch_size):
         if batch_count > 10:
             break
         model.zero_grad()
-        out, loss, y = step_2(model, batch, device)
+        out, loss, y = time_step(model, batch, device)
         loss.backward()
         optimizer.step()
         if batch_count <= 10:
@@ -99,51 +77,22 @@ def train_epoch_2(data, model, optimizer, args, device):
             logging.info("\tBatch %d, loss %.3f, perplexity %.2f", batch_count, loss.item(), perplexity)
             batch_count += 1
 
-def train_epoch(data, model, optimizer, args, device):
-    """ Trains a single epoch of the given model. """
-    model.train()
-    for batch_ind, sents in enumerate(batches(data, args.batch_size)):
-        if batch_ind > 10:
-            break
-        model.zero_grad()
-        out, loss, y = step(model, sents, device)
-        loss.backward()
-        optimizer.step()
-        if batch_ind <= 10:
-            # Calculate perplexity.
-            prob = out.exp()[torch.arange(0, y.data.shape[0], dtype=torch.int64), y.data]
-            perplexity = 2 ** prob.log2().neg().mean().item()
-            logging.info("\tBatch %d, loss %.3f, perplexity %.2f",
-                         batch_ind, loss.item(), perplexity)
-
-def perplexity_eval_2(data, model, batch_size, device):
-    model.eval()
-    with torch.no_grad():
-        entropy_sum = 0
-        word_count = 0
-        batch_count = 0
-        for batch in batches_2(data, batch_size):
-            if batch_count > 10:
-                break
-            out, _, y = step_2(model, batch, device)
-            prob = out.exp()[torch.arange(0, y.data.shape[0], dtype=torch.int64), y.data]
-            entropy_sum += prob.log2().neg().sum().item()
-            word_count += y.data.shape[0]
-            batch_count += 1
-    return 2 ** (entropy_sum / word_count)
 
 def perplexity_eval(data, model, batch_size, device):
     model.eval()
     with torch.no_grad():
         entropy_sum = 0
         word_count = 0
-        for sents in batches(data, batch_size):
-            out, _, y = step(model, sents, device)
+        batch_count = 0
+        for batch in batches(data, batch_size):
+            if batch_count > 10:
+                break
+            out, _, y = time_step(model, batch, device)
             prob = out.exp()[torch.arange(0, y.data.shape[0], dtype=torch.int64), y.data]
             entropy_sum += prob.log2().neg().sum().item()
             word_count += y.data.shape[0]
+            batch_count += 1
     return 2 ** (entropy_sum / word_count)
-
 
 def parse_args(args):
     argp = ArgumentParser(description=__doc__)
@@ -184,11 +133,6 @@ def main(args=sys.argv[1:]):
     # Create the vocabulary
     vocab = vocabulary_RNN.create_vocabulary('wiki.train.txt')
 
-    # Transform SENTENCES tokens from words to indexes
-    #train_indexes_sentences = vocabulary_RNN.corpus_to_index(train, vocab)
-    #valid_indexes_sentences = vocabulary_RNN.corpus_to_index(valid, vocab)
-    #test_indexes_sentences = vocabulary_RNN.corpus_to_index(test, vocab)
-
     # Transform WORD tokens from words to indexes
     train_indexes_word = vocabulary_RNN.word_to_index(train, vocab)
     valid_indexes_word = vocabulary_RNN.word_to_index(valid, vocab)
@@ -205,11 +149,11 @@ def main(args=sys.argv[1:]):
 
     for epoch_ind in range(args.epochs):
         logging.info("Training epoch %d", epoch_ind)
-        train_epoch_2(train_indexes_word, model, optimizer, args, device)
+        train_epoch(train_indexes_word, model, optimizer, args, device)
 
-        #perp_train = perplexity_eval_2(train_indexes_word, model, args.batch_size, device)
-        perp_valid = perplexity_eval_2(valid_indexes_word, model, args.batch_size, device)
-        perp_test = perplexity_eval_2(test_indexes_word, model, args.batch_size, device)
+        #perp_train = perplexity_eval(train_indexes_word, model, args.batch_size, device)
+        perp_valid = perplexity_eval(valid_indexes_word, model, args.batch_size, device)
+        perp_test = perplexity_eval(test_indexes_word, model, args.batch_size, device)
 
         #perplexity_train.append(perp_train)
         perplexity_valid.append(perp_valid)
