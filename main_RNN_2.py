@@ -38,13 +38,6 @@ class Rnn(nn.Module):
         out = self.fc1(out_packed_sequence.data)
         last_seq = out[-121:]
         return F.log_softmax(last_seq, dim=1)
-    #   last_seq = softmax(last_seq)
-    #   return last_seq
-
-def softmax(x):
-    X_exp = torch.exp(x)
-    partition = X_exp.sum(1, keepdim=True)
-    return X_exp / partition
 
 def batches(data, batch_size):
     batches_list = []
