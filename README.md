@@ -1,6 +1,6 @@
 # nlp_language_models
 
-For this homework, we used Pytorch and NLTK library to build different neural network models for natural language processing using ```WikiText-2``` database.
+For this homework, we used Pytorch and NLTK libraries to build different neural network models for natural language processing using ```WikiText-2``` database.
 
 ## RNN
 
