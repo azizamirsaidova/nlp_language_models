@@ -4,7 +4,7 @@
 
 """
 
-#LIBRARIES
+# LIBRARIES
 import os
 from io import open
 import time
@@ -15,6 +15,13 @@ import torch.onnx
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+import numpy as np
+#Bonus
+def log_softmax(x, dim):
+    c = x.max()
+    logsumexp = np.log(np.exp(x - c).sum())
+    return x - c - logsumexp
 
 # 2. Load in the text data
 
@@ -32,12 +39,13 @@ class Dict_word_idx(object):
     # def __len__(self):
     #     return len(self.idx2word)
 
+
 class Corpus(object):
     def __init__(self, path):
         self.dictionary = Dict_word_idx()
-        self.train = self.tokenize(path+ 'train.txt')
-        self.valid = self.tokenize(path+ 'valid.txt')
-        self.test = self.tokenize(path+ 'test.txt')
+        self.train = self.tokenize(path + 'train.txt')
+        self.valid = self.tokenize(path + 'valid.txt')
+        self.test = self.tokenize(path + 'test.txt')
 
     def tokenize(self, path):
         """Tokenizes a text file."""
@@ -50,7 +58,7 @@ class Corpus(object):
         #             self.dictionary.add_word(word)
 
         # Tokenize file content
-        #word to number mapping
+        # word to number mapping
         with open(path, 'r') as f:
             all_id = []
             for line in f:
@@ -58,11 +66,12 @@ class Corpus(object):
                 ids = []
                 for t in words:
                     ids.append(self.dictionary.add_word(t))
-                    #store in single pytorch tensor 
+                    # store in single pytorch tensor
                 all_id.append(torch.tensor(ids).type(torch.int64))
             ids = torch.cat(all_id)
 
         return ids
+
 
 # model_data_filepath = 'data/'
 
@@ -103,15 +112,17 @@ class LSTMModel(nn.Module):
         x = self.drop(x)
         x = self.decoder(x)
         x = x.view(-1, self.ntoken)
-        return F.log_softmax(x, dim=1), hidden
-
+        #         return F.log_softmax(x, dim=1), hidden
+        x = log_softmax(x, dim=1)
+        return x, hidden
 
     def init_hidden(self, batch_sz):
         weight = next(self.parameters())
         return (weight.new_zeros(self.num_layers, batch_sz, self.num_hiddens),
                 weight.new_zeros(self.num_layers, batch_sz, self.num_hiddens))
 
-    
+
+
 # 3. Load the pre-trained model
 
 parser = argparse.ArgumentParser()
@@ -132,24 +143,28 @@ args, unknown = parser.parse_known_args()
 # torch.manual_seed(args.seed)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-#creating batches for the data 
+
+# creating batches for the data
 def batch(data, batch_sz):
     no_batch = data.size(0) // batch_sz
     data = data.narrow(0, 0, no_batch * batch_sz)
     data = data.view(batch_sz, -1).t().contiguous()
     return data.to(device)
 
+
 def get_batch(source, i):
     seq_len = min(args.bptt, len(source) - 1 - i)
-    data = source[i:i+seq_len]
-    target = source[i+1:i+1+seq_len].view(-1)
+    data = source[i:i + seq_len]
+    target = source[i + 1:i + 1 + seq_len].view(-1)
     return data, target
+
 
 def repackage_hidden(h):
     if isinstance(h, torch.Tensor):
         return h.detach()
     else:
         return tuple(repackage_hidden(v) for v in h)
+
 
 eval_batch_size = 10
 corpus = Corpus(args.data)
@@ -163,6 +178,7 @@ num_tokens = len(corpus.dictionary.idx2word)
 model = LSTMModel(num_tokens, args.emsize, args.num_hidden, args.nlayers).to(device)
 criterion = nn.NLLLoss()
 
+
 # Training code
 def train():
     # Turn on training mode which enables dropout.
@@ -171,23 +187,21 @@ def train():
     print(total_loss)
 
     hidden = model.init_hidden(args.batch_size)
-    
-   
+
     for batch, i in enumerate(range(0, train_data.size(0) - 1, args.bptt)):
-    # for batch, i in enumerate(range(0, train_data.size(0) - 1, 1)):    
+        # for batch, i in enumerate(range(0, train_data.size(0) - 1, 1)):
         data, targets = get_batch(train_data, i)
-        
+
         model.zero_grad()
 
-        
         hidden = repackage_hidden(hidden)
-        
+
         output, hidden = model(data, hidden)
-        
+
         loss = criterion(output, targets)
         loss.backward()
-        
-        # gradient clipping 
+
+        # gradient clipping
         torch.nn.utils.clip_grad_norm_(model.parameters(), 0.20)
         for p in model.parameters():
             p.data.add_(p.grad, alpha=-args.lr)
@@ -196,13 +210,14 @@ def train():
 
         if batch % args.log_interval == 0 and batch > 0:
             cur_loss = total_loss / args.log_interval
-            
+
             print('| epoch {} |  '
-                    'loss {} | ppl {}'.format(
-                epoch,  cur_loss, math.exp(cur_loss)))
+                  'loss {} | ppl {}'.format(
+                epoch, cur_loss, math.exp(cur_loss)))
             total_loss = 0
         if args.dry_run:
             break
+
 
 def evaluate(data):
     # Turn on evaluation mode which disables dropout.
@@ -210,41 +225,41 @@ def evaluate(data):
     loss = 0.
     # ntokens = len(corpus.dictionary)
     hidden = model.init_hidden(args.batch_size)
-    
+
     with torch.no_grad():
         for i in range(0, data.size(0) - 1, args.bptt):
-            
             x, targets = get_batch(data, i)
-            
+
             output, hidden = model(x, hidden)
-            
+
             hidden = repackage_hidden(hidden)
-            actual_loss =criterion(output, targets).item()
-            
-            loss += actual_loss * len(x) 
-            
-            
+            actual_loss = criterion(output, targets).item()
+
+            loss += actual_loss * len(x)
+
     return loss / (len(data) - 1)
 
-for epoch in range(1, args.epochs+1):
-  train()
-  val_loss = evaluate(val_data)
-        
-  print('| end of epoch {} | valid loss {} | '
-                'valid ppl {}'.format(epoch,
-                                           val_loss, math.exp(val_loss)))
-  test_loss = evaluate(test_data)
-        
-  print('| end of epoch {} | test loss {} | '
-                'test ppl {}'.format(epoch,
-                                           test_loss, math.exp(val_loss)))
 
-perplexity_train = [403,305,261,237,222,210,202,185,191,186,182,180,177,176,173,171,169,167,166,164]
-perplexity_valid = [329,264,235,217,207,201,196,192,189,189,187,184,183,180,185,179,180,180,181,179]
-perplexity_test = [329,264,235,217,207,201,196,192,189,189,187,184,183,180,185,179,180,180,181,179]
+for epoch in range(1, args.epochs + 1):
+    train()
+    val_loss = evaluate(val_data)
+
+    print('| end of epoch {} | valid loss {} | '
+          'valid ppl {}'.format(epoch,
+                                val_loss, math.exp(val_loss)))
+    test_loss = evaluate(test_data)
+
+    print('| end of epoch {} | test loss {} | '
+          'test ppl {}'.format(epoch,
+                               test_loss, math.exp(val_loss)))
+
+perplexity_train = [403, 305, 261, 237, 222, 210, 202, 185, 191, 186, 182, 180, 177, 176, 173, 171, 169, 167, 166, 164]
+perplexity_valid = [329, 264, 235, 217, 207, 201, 196, 192, 189, 189, 187, 184, 183, 180, 185, 179, 180, 180, 181, 179]
+perplexity_test = [329, 264, 235, 217, 207, 201, 196, 192, 189, 189, 187, 184, 183, 180, 185, 179, 180, 180, 181, 179]
 import matplotlib.pyplot as plt
 
-def plot_perplexity(perplexity_train, perplexity_valid,perplexity_test):
+
+def plot_perplexity(perplexity_train, perplexity_valid, perplexity_test):
     plt.plot(perplexity_train)
     plt.plot(perplexity_valid)
     plt.plot(perplexity_test)
@@ -255,6 +270,7 @@ def plot_perplexity(perplexity_train, perplexity_valid,perplexity_test):
     # plt.legend(['train', 'validation'], loc='upper left')
     plt.legend(['train', 'validation', 'test'], loc='upper left')
     plt.show()
+
 
 # plot_perplexity(perplexity_train, perplexity_valid)
 
