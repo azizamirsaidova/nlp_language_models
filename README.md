@@ -4,7 +4,7 @@ For this homework, we used Pytorch and NLTK library to build different neural ne
 
 ## RNN
 
-To run the RNN model for Question 2, the file ```main_RNN``` has to be executed, which will call other files like vocabulary_RNN and import_data_RNN to run correctly.
+To run the RNN model for Question 2, the file ```main_RNN``` has to be executed, which will call other files like ```vocabulary_RNN``` and ```import_data_RNN``` to run correctly.
 
 
 ## LSTM
