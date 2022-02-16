@@ -103,13 +103,20 @@ class LSTMModel(nn.Module):
         x = self.drop(x)
         x = self.decoder(x)
         x = x.view(-1, self.ntoken)
-        return F.log_softmax(x, dim=1), hidden
+#         return F.log_softmax(x, dim=1), hidden
+        x = softmax(x)
+        return x, hidden
 
     def init_hidden(self, batch_sz):
         weight = next(self.parameters())
         return (weight.new_zeros(self.num_layers, batch_sz, self.num_hiddens),
                 weight.new_zeros(self.num_layers, batch_sz, self.num_hiddens))
-
+# Softmax
+def softmax(x):
+      X_exp = torch.exp(x)
+      partition = X_exp.sum(1, keepdim=True)
+      return X_exp / partition
+    
 # 3. Load the pre-trained model
 
 parser = argparse.ArgumentParser()
