@@ -22,9 +22,7 @@ import torch.nn.functional as F
 import numpy as np
 #Bonus
 def log_softmax(x, dim):
-    c = x.max()
-    logsumexp = np.log(np.exp(x - c).sum())
-    return x - c - logsumexp
+    return x - x.exp().sum(-1).log().unsqueeze(-1)
 
 # 2. Load in the text data
 
