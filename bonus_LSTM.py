@@ -20,9 +20,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import numpy as np
-#Bonus
+
+#Bonus: Softmax
 def log_softmax(x, dim):
     return x - x.exp().sum(-1).log().unsqueeze(-1)
+
+#Bonus: Negative Log Likelihood loss
+def NLLLoss(logs, targets):
+    out = torch.diag(logs[:,targets])
+    return -out.sum()/len(out)
 
 # 2. Load in the text data
 
@@ -190,7 +196,7 @@ def train():
 
         output, hidden = model(data, hidden)
 
-        loss = criterion(output, targets)
+        loss = NLLLoss(output, targets)
         loss.backward()
 
         # gradient clipping
