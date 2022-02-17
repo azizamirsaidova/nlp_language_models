@@ -36,7 +36,7 @@ class Rnn(nn.Module):
         embedded_sents = nn.utils.rnn.PackedSequence(self.get_embedded(packed_sents.data), packed_sents.batch_sizes)
         out_packed_sequence, input_sizes = self.rnn(embedded_sents)
         out = self.fc1(out_packed_sequence.data)
-        last_seq = out[-121:]
+        last_seq = out[-61:]
         return F.log_softmax(last_seq, dim=1)
 
 def batches(data, batch_size):
@@ -65,13 +65,13 @@ def train_epoch(data, model, optimizer, args, device):
     batch_count = 0
     perplexity_overall = 0
     for batch in batches(data, args.batch_size):
-        if batch_count > 20:
+        if batch_count > args.batch_count:
             break
         model.zero_grad()
         out, loss, y = time_step(model, batch, device)
         loss.backward()
         optimizer.step()
-        if batch_count <= 20:
+        if batch_count <= args.batch_count:
             # Calculate perplexity.
             prob = out.exp()[torch.arange(0, y.data.shape[0], dtype=torch.int64), y.data]
             perplexity = 2 ** prob.log2().neg().mean().item()
@@ -109,9 +109,10 @@ def parse_args(args):
     argp.add_argument("--num-layers", type=int, default=2)
     argp.add_argument("--num-dropout", type=float, default=0.0)
     argp.add_argument("--epochs", type=int, default=20)
-    argp.add_argument("--batch-size", type=int, default=151)
+    argp.add_argument("--batch-size", type=int, default=91)
     argp.add_argument("--lr", type=float, default=0.001)
     argp.add_argument("--no-cuda", action="store_true")
+    argp.add_argument("--batch-count", type=int, default=20)
     return argp.parse_args(args)
 
 def plot_perplexity(perplexity_train, perplexity_valid, perplexity_test):
