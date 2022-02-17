@@ -32,6 +32,12 @@ class Rnn(nn.Module):
         else:
             return self.embedding(word_indexes)
 
+    def init_weights(self):
+        init = 0.1
+        self.encoder.weight.data.uniform_(-init, init)
+        self.decoder.bias.data.zero_()
+        self.decoder.weight.data.uniform_(-init, init)
+
     def forward(self, packed_sents):
         embedded_sents = nn.utils.rnn.PackedSequence(self.get_embedded(packed_sents.data), packed_sents.batch_sizes)
         out_packed_sequence, input_sizes = self.rnn(embedded_sents)

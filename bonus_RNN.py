@@ -36,11 +36,13 @@ class Rnn(nn.Module):
         self.rnn = nn.RNN(embedding_dim, hidden_dim, num_layers, dropout=dropout)
         self.fc1 = nn.Linear(hidden_dim, vocab_size)
 
+
     def get_embedded(self, word_indexes):
         if self.tied:
             return self.fc1.weight.index_select(0, word_indexes)
         else:
             return self.embedding(word_indexes)
+
 
     def forward(self, packed_sents):
         embedded_sents = nn.utils.rnn.PackedSequence(self.get_embedded(packed_sents.data), packed_sents.batch_sizes)
