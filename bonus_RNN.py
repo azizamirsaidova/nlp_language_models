@@ -17,9 +17,14 @@ import import_data_RNN
 from datetime import datetime
 import matplotlib.pyplot as plt
 
-
+#Bonus: Softmax
 def log_softmax(last_seq, dim):
     return last_seq - last_seq.exp().sum(-1).log().unsqueeze(-1)
+
+#Bonus: Negative Log Likelihood Loss
+def NLLLoss(logs, targets):
+    out = torch.diag(logs[:,targets])
+    return -out.sum()/len(out)
 
 class Rnn(nn.Module):
 
@@ -63,7 +68,7 @@ def time_step(model, data, device):
     if device.type == 'cuda':
         x, y = x.cuda(), y.cuda()
     out = model(x)
-    loss = F.nll_loss(out, y.data)
+    loss = NLLLoss(out, y.data)
     return out, loss, y
 
 def train_epoch(data, model, optimizer, args, device):
@@ -75,6 +80,7 @@ def train_epoch(data, model, optimizer, args, device):
             break
         model.zero_grad()
         out, loss, y = time_step(model, batch, device)
+        
         loss.backward()
         optimizer.step()
         if batch_count <= args.batch_count:
