@@ -10,3 +10,7 @@ To run the RNN model incorporating the bonus task, the file ```bonus_RNN``` has 
 
 
 ## LSTM
+
+To run the LSTM model for Question 3, the file ```main_LSTM``` has to be executed.
+
+To run the LSTM model incorporating the bonus task, the file ```bonus_LSTM``` has to be executed, and will run again the same model but with some functions implemented manually, as softmax, logits and negative log-probabilities.
