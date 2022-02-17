@@ -19,9 +19,7 @@ import matplotlib.pyplot as plt
 
 
 def log_softmax(last_seq, dim):
-    c = last_seq.max()
-    logsumexp = np.log(np.exp(last_seq - c).sum())
-    return last_seq - c - logsumexp
+    return last_seq - last_seq.exp().sum(-1).log().unsqueeze(-1)
 
 class Rnn(nn.Module):
 
