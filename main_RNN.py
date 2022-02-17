@@ -65,13 +65,13 @@ def train_epoch(data, model, optimizer, args, device):
     batch_count = 0
     perplexity_overall = 0
     for batch in batches(data, args.batch_size):
-        if batch_count > 5:
+        if batch_count > 20:
             break
         model.zero_grad()
         out, loss, y = time_step(model, batch, device)
         loss.backward()
         optimizer.step()
-        if batch_count <= 5:
+        if batch_count <= 20:
             # Calculate perplexity.
             prob = out.exp()[torch.arange(0, y.data.shape[0], dtype=torch.int64), y.data]
             perplexity = 2 ** prob.log2().neg().mean().item()
