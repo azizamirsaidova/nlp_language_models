@@ -73,13 +73,13 @@ def train_epoch(data, model, optimizer, args, device):
     batch_count = 0
     perplexity_overall = 0
     for batch in batches(data, args.batch_size):
-        if batch_count > 5:
+        if batch_count > args.batch_count:
             break
         model.zero_grad()
         out, loss, y = time_step(model, batch, device)
         loss.backward()
         optimizer.step()
-        if batch_count <= 5:
+        if batch_count <= args.batch_count:
             # Calculate perplexity.
             prob = out.exp()[torch.arange(0, y.data.shape[0], dtype=torch.int64), y.data]
             perplexity = 2 ** prob.log2().neg().mean().item()
@@ -120,6 +120,7 @@ def parse_args(args):
     argp.add_argument("--batch-size", type=int, default=151)
     argp.add_argument("--lr", type=float, default=0.001)
     argp.add_argument("--no-cuda", action="store_true")
+    argp.add_argument("--batch-count", type=int, default=20)
     return argp.parse_args(args)
 
 def plot_perplexity(perplexity_train, perplexity_valid, perplexity_test):

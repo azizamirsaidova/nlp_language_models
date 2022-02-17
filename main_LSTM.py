@@ -45,7 +45,6 @@ class Corpus(object):
     def tokenize(self, path):
         """Tokenizes a text file."""
        
-       
         # word to index mapping - replacing new lines with eos tokens
         with open(path, 'r', encoding="utf8") as f:
             for line in f:
@@ -110,7 +109,7 @@ class LSTMModel(nn.Module):
 # 3. Load the pre-trained model
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--data', type=str, default='/content/wiki.')
+parser.add_argument('--data', type=str, default='wiki.')
 parser.add_argument('--emsize', type=int, default=100)
 parser.add_argument('--num_hidden', type=int, default=100)
 parser.add_argument('--epochs', type=int, default=20)
