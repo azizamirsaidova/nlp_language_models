@@ -1,5 +1,5 @@
 import nltk
-nltk.download('punkt')
+nltk.download('popular')
 from nltk.tokenize import sent_tokenize, word_tokenize
 
 # Load the file and tokenize in sentences, and also each sentence tokenized in words

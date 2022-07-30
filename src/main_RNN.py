@@ -12,7 +12,7 @@ from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pack_sequence
 
 import import_data_RNN
-import vocabulary_RNN
+import src.vocabulary_RNN as vocabulary_RNN
 
 class Rnn(nn.Module):
 

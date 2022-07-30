@@ -9,24 +9,36 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-import vocabulary_RNN
+import src.vocabulary_RNN as vocabulary_RNN
 import import_data_RNN
 
 from datetime import datetime
 import matplotlib.pyplot as plt
 
 
-class Rnn(nn.Module):
-    """ A language model RNN with GRU layer(s). """
+class LSTM(nn.Module):
+    """ A language model LSTM """
 
     def __init__(self, vocab_size, embedding_dim, hidden_dim, gru_layers, tied, dropout):
-        super(Rnn, self).__init__()
-        self.tied = tied
+
+        # super(Rnn, self).__init__()
+        # self.tied = tied
+        # if not tied:
+        #     self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        # self.gru = nn.GRU(embedding_dim, hidden_dim, gru_layers,
+        #                   dropout=dropout)
+        # self.fc1 = nn.Linear(hidden_dim, vocab_size)
+        super(LSTM, self).__init__()
         if not tied:
             self.embedding = nn.Embedding(vocab_size, embedding_dim)
-        self.gru = nn.GRU(embedding_dim, hidden_dim, gru_layers,
-                          dropout=dropout)
+
+        self.lstm = nn.LSTM(embedding_dim, hidden_dim, gru_layers, batch_first=True)
+        # self.drop = nn.Dropout(p)  # dropout
         self.fc1 = nn.Linear(hidden_dim, vocab_size)
+        # self.h_o.weight = self.i_h.weight  # weight tying
+        # self.h = [torch.zeros(n_layers, bs, n_hidden) for _ in range(2)]
+
+
 
     def get_embedded(self, word_indexes):
         if self.tied:
@@ -42,7 +54,7 @@ class Rnn(nn.Module):
         """
         embedded_sents = nn.utils.rnn.PackedSequence(
             self.get_embedded(packed_sents.data), packed_sents.batch_sizes)
-        out_packed_sequence, _ = self.gru(embedded_sents)
+        out_packed_sequence, _ = self.lstm(embedded_sents)
         out = self.fc1(out_packed_sequence.data)
         return F.log_softmax(out, dim=1)
 
@@ -153,7 +165,7 @@ def main(args=sys.argv[1:]):
     valid_indexes = vocabulary_RNN.corpus_to_index(valid, vocab)
     test_indexes = vocabulary_RNN.corpus_to_index(test, vocab)
 
-    model = Rnn(len(vocab), args.embedding_dim,
+    model = LSTM(len(vocab), args.embedding_dim,
                   args.gru_hidden, args.gru_layers,
                   not args.untied, args.gru_dropout).to(device)
     optimizer = optim.RMSprop(model.parameters(), lr=args.lr)
