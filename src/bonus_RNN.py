@@ -4,22 +4,27 @@ import math
 import random
 import sys
 
+import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-<<<<<<< HEAD:src/main_RNN.py
-import import_data_RNN
-import src.vocabulary_RNN as vocabulary_RNN
-=======
 import vocabulary_RNN
 import import_data_RNN
 
 from datetime import datetime
 import matplotlib.pyplot as plt
 
->>>>>>> 8cf531df62e444a4e5e2cce5d3819f5fc29ef842:main_RNN.py
+#Bonus: Softmax
+def log_softmax(last_seq, dim):
+    return last_seq - last_seq.exp().sum(-1).log().unsqueeze(-1)
+
+#Bonus: Negative Log Likelihood Loss
+def NLLLoss(logs, targets):
+    out = torch.diag(logs[:,targets])
+    return -out.sum()/len(out)
 
 class Rnn(nn.Module):
 
@@ -31,24 +36,21 @@ class Rnn(nn.Module):
         self.rnn = nn.RNN(embedding_dim, hidden_dim, num_layers, dropout=dropout)
         self.fc1 = nn.Linear(hidden_dim, vocab_size)
 
+
     def get_embedded(self, word_indexes):
         if self.tied:
             return self.fc1.weight.index_select(0, word_indexes)
         else:
             return self.embedding(word_indexes)
 
-    def init_weights(self):
-        init = 0.1
-        self.encoder.weight.data.uniform_(-init, init)
-        self.decoder.bias.data.zero_()
-        self.decoder.weight.data.uniform_(-init, init)
 
     def forward(self, packed_sents):
         embedded_sents = nn.utils.rnn.PackedSequence(self.get_embedded(packed_sents.data), packed_sents.batch_sizes)
         out_packed_sequence, input_sizes = self.rnn(embedded_sents)
         out = self.fc1(out_packed_sequence.data)
-        last_seq = out[-61:]
-        return F.log_softmax(last_seq, dim=1)
+        last_seq = out[-121:]
+        last_seq= log_softmax(last_seq, dim=1)
+        return last_seq
 
 def batches(data, batch_size):
     batches_list = []
@@ -68,7 +70,7 @@ def time_step(model, data, device):
     if device.type == 'cuda':
         x, y = x.cuda(), y.cuda()
     out = model(x)
-    loss = F.nll_loss(out, y.data)
+    loss = NLLLoss(out, y.data)
     return out, loss, y
 
 def train_epoch(data, model, optimizer, args, device):
@@ -80,6 +82,7 @@ def train_epoch(data, model, optimizer, args, device):
             break
         model.zero_grad()
         out, loss, y = time_step(model, batch, device)
+        
         loss.backward()
         optimizer.step()
         if batch_count <= args.batch_count:
@@ -120,7 +123,7 @@ def parse_args(args):
     argp.add_argument("--num-layers", type=int, default=2)
     argp.add_argument("--num-dropout", type=float, default=0.0)
     argp.add_argument("--epochs", type=int, default=20)
-    argp.add_argument("--batch-size", type=int, default=91)
+    argp.add_argument("--batch-size", type=int, default=151)
     argp.add_argument("--lr", type=float, default=0.001)
     argp.add_argument("--no-cuda", action="store_true")
     argp.add_argument("--batch-count", type=int, default=20)
